@@ -10,28 +10,36 @@ import numpy as np
 h2o.init(max_mem_size='4G')
 
 df = h2o.import_file('/Users/ohavryleshko/Documents/GitHub/AutoML/FinTechLTV/digital_wallet_ltv_dataset.csv')
+
 logging.basicConfig(level=logging.INFO)
 warnings.filterwarnings('ignore')
 # inspecting loaded data
 logging.info('Begin data inspection')
 logging.info('First 5 rows of data')
 print(df.head(5))
-logging.info('Describing the data...')
-print(df.describe())
+#logging.info('Describing the data...')
+#print(df.describe())
+logging.info('List of all features...')
+print(df.columns)
 #logging.info('Shape...')
 #print(df.shape)
 
 #EDA (pre)
 logging.info('Begin EDA...')
 # dropping unnecessary features
-df = df.drop(['Customer_ID'])
+df = df.drop(['Customer_ID', 'Total_Spent']) # as I ran the program a couple times, these features appear to be nearly perfectly correlated with LTV (0.9999) or can reconstruct mathematically Total_Spent, so I assume it causes data leakage.
+
 # correlation
 logging.info('Finiding the most correlated features...')
+
 # converting into numerical using h2o
 df['Location'] = df['Location'].asfactor()
-df['Income_Level'] = df['Income_Level'].asfactor() 
+df['Income_Level'] = df['Income_Level'].asfactor()
+df['App_Usage_Frequency'] = df['App_Usage_Frequency'].asfactor()
+
 # TEMPORARILY converting h2o into pandas for EDA
 df_pd = df.as_data_frame(use_pandas=True)
+
 #checking for skewed features
 skewed = df_pd.select_dtypes(include='number').drop(columns=['LTV'], errors='ignore').skew()
 print(f'Sroted skewed features:\n', skewed.sort_values(ascending=False))
@@ -46,6 +54,8 @@ df_pd = df_pd.dropna()
 df = h2o.H2OFrame(df_pd)
 df['Location'] = df['Location'].asfactor()
 df['Income_Level'] = df['Income_Level'].asfactor() 
+df['App_Usage_Frequency'] = df['App_Usage_Frequency'].asfactor()
+
 #EDA Main
 #visualisations
 #histogram
@@ -57,7 +67,7 @@ plt.tight_layout()
 plt.show()
 
 #function for scatterplot
-scatter_features = ['Total_Spent', 'Min_Transaction_Value', 'Max_Transaction_Value', 'Avg_Transaction_Value', 'Total_Transactions']
+scatter_features = ['Avg_Transaction_Value', 'Total_Transactions', 'Active_Days', 'Last_Transaction_Days_Ago', 'Min_Transaction_Value', 'Max_Transaction_Value', 'Loyalty_Points_Earned', 'Customer_Satisfaction_Score']
 sns.set_theme(style='whitegrid')
 
 def scatter_plot(df_pd, feature, target):
@@ -69,19 +79,20 @@ def scatter_plot(df_pd, feature, target):
         plt.ylabel(target)
         plt.tight_layout()
         plt.show()
+        
 
 scatter_plot(df_pd, scatter_features, 'LTV')
 
 #heatmap correlation
-heat_f = ['Total_Spent', 'Min_Transaction_Value', 'Max_Transaction_Value', 'Avg_Transaction_Value', 'Total_Transactions']
+heat_f = ['Avg_Transaction_Value', 'Total_Transactions', 'Active_Days', 'Last_Transaction_Days_Ago', 'Min_Transaction_Value', 'Max_Transaction_Value', 'Loyalty_Points_Earned', 'Customer_Satisfaction_Score']
 sns.set_theme(style='whitegrid')
 plt.figure(figsize=(10, 6))
 sns.set_style('white')
 corr_heatmap = df_pd[heat_f].corr()
 
 sns.heatmap(corr_heatmap, annot=True, fmt='.2f', cmap='coolwarm', linewidths=0.5)
-plt.title('Heatmap - top 5 features', fontsize=15)
-plt.xlabel('Top 5', fontsize=14)
+plt.title('Heatmap - top 6 features', fontsize=15)
+plt.xlabel('Top 6', fontsize=14)
 plt.xticks(ha='right', fontsize=10)
 plt.ylabel('LTV', fontsize=14)
 plt.yticks(fontsize=10)
@@ -92,24 +103,27 @@ logging.info('FInished EDA main.')
 logging.info('Begin feature engineering...')
 #Feature Engineering
 ##i use interactions as in real world data it it nearly always common that features give powerful outcome in combination, not isolation 
+df_pd['App_Usage_Frequency_n'] = df_pd['App_Usage_Frequency'].astype('category').cat.codes
 interactions = [
-    ('Total_Spent', 'Avg_Transaction_Value'), # ration may be useful
+    ('App_Usage_Frequency_n', 'Active_Days'), # how often do they use bank card and how much on average they spent
     ('Max_Transaction_Value', 'Min_Transaction_Value'), # difference can give insight
-    ('Total_Spent', 'Total_Transactions'),  # how many transactions comprise total value spent
-    ('Customer_Satisfaction_Score', 'Issue_Resolution_Time') # the faster, the better for lower LTV
+    ('Customer_Satisfaction_Score', 'Issue_Resolution_Time'), # the faster, the better for lower LTV
+    ('Active_Days', 'Customer_Satisfaction_Score'), # how much spent on average over the period of active days
+    ('Last_Transaction_Days_Ago', 'Active_Days') # how much time has gone since last transaction during active days period
 ]
 
 def add_interactions(df_pd, interactions):
     for f1, f2 in  interactions:
         new_col = f'{f1}_&_{f2}'
         df_pd[new_col] = df_pd[f1] * df_pd[f2]
-    return df_pd # returning as separate features
+    return df_pd # returning as separate feature
 
 df_pd = add_interactions(df_pd, interactions)
 df = h2o.H2OFrame(df_pd)
 df['Location'] = df['Location'].asfactor()
 df['Income_Level'] = df['Income_Level'].asfactor()
 
+#creating new 
 logging.info('Finished feature engineering.')
 
 #start of modeling stage using h2o autoML (for the first time!)
@@ -150,3 +164,28 @@ print('RMSE:', perf.rmse())
 print('R^2:', perf.r2())
 print('MAE:', perf.mae())
 
+# checking model prediction
+preds = best_model.predict(test)
+preds_pd = preds.as_data_frame()
+actuals_pd = test[target].as_data_frame()
+
+# visualising 
+#data for barplot (results )
+experiments = ['With leakage', 'Without leakege']
+r2_scores = [0.99, 0.36]
+rmse_scores = [1000, 35000]
+mae_scores = [800, 25000]
+
+#barplot function
+def bar_plot(labels, value, metric_name):
+    sns.set_style('whitegrid')
+    plt.figure(figsize=(10, 8))
+    sns.barplot(x=labels, y=value, palette='Blues_d', edgecolor='black', width=0.5)
+    plt.ylabel(metric_name, fontsize=14)
+    plt.title(f'{metric_name} comparison', fontsize=16)
+    plt.tight_layout()
+    plt.show()
+
+bar_plot(experiments, r2_scores, 'R2 score comparison')
+bar_plot(experiments, rmse_scores, 'RMSE score comparison')
+bar_plot(experiments, mae_scores, 'MAE score comparison')
