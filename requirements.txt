@@ -1,5 +1,8 @@
 h2o
 pandas
-matplotlib
+matplotlib 
 seaborn
-logging
+fastapi
+uvicorn
+pydantic
+gradio
