@@ -11,7 +11,7 @@ WORKDIR /app
 
 # Install Java (required by h2o)
 RUN apt-get update && \
-    apt-get install -y openjdk-11-jre && \
+    apt-get install -y default-jre && \
     apt-get clean
 
 # Copy requirements and install dependencies
