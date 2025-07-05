@@ -9,7 +9,7 @@ import numpy as np
 
 h2o.init(max_mem_size='4G')
 
-df = h2o.import_file('/Users/ohavryleshko/Documents/GitHub/AutoML/FinTechLTV/digital_wallet_ltv_dataset.csv')
+df = h2o.import_file('data/digital_wallet_ltv_dataset.csv')
 
 logging.basicConfig(level=logging.INFO)
 warnings.filterwarnings('ignore')
