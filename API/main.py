@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 app = FastAPI()
 h2o.init(log_level='ERRR')
 
-model = h2o.load_model("models/StackedEnsemble_BestOfFamily_1_AutoML_8_20250705_143353")
+model = h2o.load_model('models/StackedEnsemble_BestOfFamily_1_AutoML_11_20250707_121248')
 
 
 class LTVIN(BaseModel):
