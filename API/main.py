@@ -5,11 +5,15 @@ from h2o.frame import H2OFrame
 import pandas as pd
 import gradio as gr
 from fastapi.responses import RedirectResponse
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 h2o.init(log_level='ERRR')
 
-model = h2o.load_model('/models/StackedEnsemble_BestOfFamily_1_AutoML_8_20250705_143353')
+model = h2o.load_model("models/StackedEnsemble_BestOfFamily_1_AutoML_8_20250705_143353")
+
 
 class LTVIN(BaseModel):
     Location: str

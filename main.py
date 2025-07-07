@@ -190,4 +190,4 @@ bar_plot(experiments, r2_scores, 'R2 score comparison')
 bar_plot(experiments, rmse_scores, 'RMSE score comparison')
 bar_plot(experiments, mae_scores, 'MAE score comparison')
 
-h2o.save_model(best_model, path='/Users/ohavryleshko/Documents/GitHub/AutoML/FinTechLTV/models', force=True) # force overrides the file without asking
+h2o.save_model(best_model, path='/Users/ohavryleshko/Documents/GitHub/AutoML/FinTechLTV/models',  force=True) # force overrides the file without asking
